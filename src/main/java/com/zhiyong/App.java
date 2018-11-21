@@ -6,7 +6,10 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -14,10 +17,62 @@ public class App {
     private static final String BAIDU_DICT_URL_BASE = "https://dict.baidu.com";
 
     class Word {
-        String pinyin;
-        String chineseExplain;
-        String englishExplain;
-        String baikePreview;
+        private String pinyin;
+        private String chineseExplain;
+        private String englishExplain;
+        private String baikePreview;
+
+        public Word(String pinyin, String chineseExplain, String englishExplain) {
+            this.pinyin = pinyin;
+            this.chineseExplain = chineseExplain;
+            this.englishExplain = englishExplain;
+        }
+
+        public Word(String baikePreview) {
+            this.baikePreview = baikePreview;
+        }
+
+        public String getPinyin() {
+            return pinyin;
+        }
+
+        public String getChineseExplain() {
+            return chineseExplain;
+        }
+
+        public String getEnglishExplain() {
+            return englishExplain;
+        }
+
+        public String getBaikePreview() {
+            return baikePreview;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Word word = (Word) o;
+            return Objects.equals(getPinyin(), word.getPinyin()) &&
+                    Objects.equals(getChineseExplain(), word.getChineseExplain()) &&
+                    Objects.equals(getEnglishExplain(), word.getEnglishExplain()) &&
+                    Objects.equals(getBaikePreview(), word.getBaikePreview());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(getPinyin(), getChineseExplain(), getEnglishExplain(), getBaikePreview());
+        }
+
+        @Override
+        public String toString() {
+            return "Word{" +
+                    "pinyin='" + pinyin + '\'' +
+                    ", chineseExplain='" + chineseExplain + '\'' +
+                    ", englishExplain='" + englishExplain + '\'' +
+                    ", baikePreview='" + baikePreview + '\'' +
+                    '}';
+        }
     }
 
     /**
@@ -27,7 +82,7 @@ public class App {
      *
      * @param word
      */
-    private void dictLookup(String word) throws IOException {
+    private Set<Word> dictLookup(String word) throws IOException {
         System.out.println();
         System.out.println(word);
 
@@ -52,14 +107,7 @@ public class App {
             if (hrefLength - word.length() > 1) {
                 System.out.println("GONNA SPLIT");
                 Set<String> splitWords = word.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet());
-                splitWords.stream().forEach(x -> {
-                    try {
-                        dictLookup(x);
-                    } catch (IOException e) {
-                        System.exit(1);
-                    }
-                });
-                return;
+                return splitWords.stream().map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
             }
 
             String url = BAIDU_DICT_URL_BASE + href;
@@ -70,13 +118,14 @@ public class App {
         if (pinyinWrapper == null) {
             System.out.println("NOT FOUND. GONNA SPLIT");
             Set<String> splitWords = word.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet());
-            splitWords.forEach(this::dictLookupHelper);
-            return;
+            return splitWords.stream().map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
         }
+
+        Set<Word> results = new HashSet<>();
 
         // Pinyin
         String pinyin = pinyinWrapper.selectFirst("b").text().replace("[", "").replace("]", "").trim();
-        System.out.println(pinyin);
+//        System.out.println(pinyin);
 
         // Chinese explanation.
         Element basicWrapper = dictDoc.getElementById("basicmean-wrapper");
@@ -86,32 +135,39 @@ public class App {
                 System.out.println("MEANING NOT FOUND.");
             } else {
                 System.out.println("Link to Baike article:" + initialUrl);
-                System.out.println(baikeWrapper.selectFirst("p").text());
+//                System.out.println(baikeWrapper.selectFirst("p").text());
+                Word resultWord = new Word(baikeWrapper.selectFirst("p").text());
+                results.add(resultWord);
             }
-            return;
+            return results;
         }
         String chineseExplain = basicWrapper.child(1).text().trim();
         int start = chineseExplain.indexOf("]");
         if (start != -1) {
             chineseExplain = chineseExplain.substring(start + 1).trim();
         }
-        System.out.println(chineseExplain);
+//        System.out.println(chineseExplain);
 
         // English explanation.
         Element engWrapper = dictDoc.getElementById("fanyi-wrapper").child(1);
         String eng = engWrapper.text().trim();
-        System.out.println(eng);
+//        System.out.println(eng);
+
+        Word resultWord = new Word(pinyin, chineseExplain, eng);
+        results.add(resultWord);
+        return results;
     }
 
-    private void dictLookupHelper(String word) {
+    private Set<Word> dictLookupHelper(String word) {
         try {
-            dictLookup(word);
+            return dictLookup(word);
         } catch (IOException e) {
             System.exit(1);
         }
+        return null;
     }
 
-    private void getWords() throws IOException {
+    private Set<Word> getWords() throws IOException {
         // Get text of article from sina.com.cn.
         Document doc = Jsoup.connect("https://news.sina.com.cn/c/2018-11-19/doc-ihnyuqhi3254063.shtml").get();
         Element textElement = doc.getElementById("artibody");
@@ -126,17 +182,24 @@ public class App {
 
         // Segmentation and deduplication.
         JiebaSegmenter segmenter = new JiebaSegmenter();
-        Set<String> segments = new HashSet<>(segmenter.sentenceProcess(text));
+//        Set<String> segments = new HashSet<>(segmenter.sentenceProcess(text));
+        List<String> segmentList = new ArrayList<>(segmenter.sentenceProcess(text));
+        Set<String> segments = new HashSet<>(segmentList.stream().limit(10).collect(Collectors.toList()));
+
+
+
 
         // Filter Chinese strings then do dictionary lookup.
-        segments.stream().filter(x -> Character.UnicodeScript.of(x.charAt(0)) ==
+        return segments.stream().filter(x -> Character.UnicodeScript.of(x.charAt(0)) ==
                 Character.UnicodeScript.HAN)
-                .collect(Collectors.toSet())
-                .forEach(this::dictLookupHelper);
+                .map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
     }
 
     public static void main(String[] args) throws IOException {
         App app = new App();
-        app.getWords();
+        Set<Word> results = app.getWords();
+        for (Word word : results) {
+            System.out.println(word);
+        }
     }
 }
