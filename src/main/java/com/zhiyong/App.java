@@ -5,116 +5,115 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Hello world!
- *
- */
 public class App {
-    public static void main( String[] args ) throws IOException {
+    /**
+     * Lookup Baidu dictionary for a word.
+     * @param word
+     */
+    public static void dictLookup(String word) {
+
+    }
+
+    public static void main(String[] args) throws IOException {
         // Get text of article from sina.com.cn.
-//        Document doc = Jsoup.connect("https://news.sina.com.cn/c/2018-11-19/doc-ihnyuqhi3254063.shtml").get();
-//        Element textElement = doc.getElementById("artibody");
-//        if (textElement == null) {
-//            textElement = doc.getElementById("article");
-//        }
-//        if (textElement == null) {
-//            // todo: Log error.
-//        }
-//
-//        String text = textElement.text();
-//
-//
-//        // Segmentation and deduplication.
-//        JiebaSegmenter segmenter = new JiebaSegmenter();
-//        Set<String> segments = new HashSet<>(segmenter.sentenceProcess(text));
-//
-//        // Filter Chinese strings.
-//        Set<String> filtered = segments.stream().filter(x -> Character.UnicodeScript.of(x.charAt(0)) == Character.UnicodeScript.HAN).collect(Collectors.toSet());
-//        for (String segment : filtered) {
-//            System.out.print(segment);
-//            System.out.println(Character.UnicodeScript.of(segment.charAt(0)) == Character.UnicodeScript.HAN);
-//        }
-
-        // Dictionary lookup and store to DB.
-        final String ZDICT_BASE_URL = "http://www.zdic.net";
-        String urlParameters  = "q=%E4%BC%B8%E6%89%8B%E4%B8%8D%E8%A7%81%E4%BA%94%E6%8C%87";
-        byte[] postData       = urlParameters.getBytes( StandardCharsets.UTF_8 );
-        int    postDataLength = postData.length;
-        String request        = ZDICT_BASE_URL + "/sousuo/";
-        URL    url            = new URL( request );
-        HttpURLConnection conn= (HttpURLConnection) url.openConnection();
-        conn.setDoOutput( true );
-        conn.setInstanceFollowRedirects( false );
-        conn.setRequestMethod( "POST" );
-        conn.setRequestProperty( "Content-Type", "application/x-www-form-urlencoded");
-        conn.setRequestProperty( "charset", "utf-8");
-        conn.setRequestProperty( "Content-Length", Integer.toString( postDataLength ));
-        conn.setUseCaches( false );
-        conn.getOutputStream().write(postData);
-
-        int status = conn.getResponseCode();
-
-        boolean redirect = false;
-        if (status != HttpURLConnection.HTTP_OK) {
-            if (status == HttpURLConnection.HTTP_MOVED_TEMP
-                    || status == HttpURLConnection.HTTP_MOVED_PERM
-                    || status == HttpURLConnection.HTTP_SEE_OTHER)
-                redirect = true;
+        Document doc = Jsoup.connect("https://news.sina.com.cn/c/2018-11-19/doc-ihnyuqhi3254063.shtml").get();
+        Element textElement = doc.getElementById("artibody");
+        if (textElement == null) {
+            textElement = doc.getElementById("article");
+        }
+        if (textElement == null) {
+            // todo: Log error.
         }
 
-        System.out.println("Response Code ... " + status);
+        String text = textElement.text();
 
-        if (redirect) {
+        // Segmentation and deduplication.
+        JiebaSegmenter segmenter = new JiebaSegmenter();
+        Set<String> segments = new HashSet<>(segmenter.sentenceProcess(text));
 
-            // get redirect url from "location" header field
-            String newUrl = conn.getHeaderField("Location");
+        // Filter Chinese strings.
+        Set<String> filtered = segments.stream()
+                .filter(x -> Character.UnicodeScript.of(x.charAt(0)) ==
+                        Character.UnicodeScript.HAN)
+                .collect(Collectors.toSet());
 
-            // get the cookie if need, for login
-            String cookies = conn.getHeaderField("Set-Cookie");
 
-            // open the new connnection again
-            conn = (HttpURLConnection) new URL(ZDICT_BASE_URL + newUrl).openConnection();
-            conn.setRequestProperty("Cookie", cookies);
-            conn.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
-            conn.addRequestProperty("User-Agent", "Mozilla");
-            conn.addRequestProperty("Referer", "google.com");
+        for (String segment : filtered) {
+            System.out.println();
+            System.out.println(segment);
 
-            System.out.println("Redirect to URL : " + newUrl);
+            // Dictionary lookup and store to DB.
+            final String BAIDU_DICT_URL_BASE = "https://dict.baidu.com";
+            final String INITIAL_URL = BAIDU_DICT_URL_BASE + "/s?wd=" + segment;
+            Document dictDoc = Jsoup.connect(INITIAL_URL).get();
 
+            // May be a multiple-choice page. If so, select 1st choice.
+            Element pinyinWrapper = dictDoc.getElementById("pinyin");
+            if (pinyinWrapper == null && !dictDoc.text().contains("百度汉语中没有收录")) {
+                String href = dictDoc.getElementById("data-container").selectFirst("a").attr("href");
+                // Regard 1st choice as irrelevant if it is >1 character longer than the segment.
+                int start = href.indexOf("=");
+                int end = href.indexOf("&");
+                if (end == -1) {
+                    end = href.length();
+                }
+                System.out.println(href);
+                int hrefLength = href.substring(start + 1, end).length();
+                System.out.println("LENGTH: " + hrefLength);
+
+                // If length is more than 1 character greater, look up individual words.
+                if (hrefLength - segment.length() > 1) {
+//                    finalSet.addAll(segment.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet()));
+                    Set<String> words = segment.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet());
+
+
+
+                }
+
+
+
+                String url = BAIDU_DICT_URL_BASE + href;
+                System.out.println(url);
+                dictDoc = Jsoup.connect(url).get();
+                pinyinWrapper = dictDoc.getElementById("pinyin");
+            }
+            if (pinyinWrapper == null) {
+                System.out.println("NOT FOUND.");
+                continue;
+            }
+
+            // Pinyin
+            String pinyin = pinyinWrapper.selectFirst("b").text().replace("[", "").replace("]", "").trim();
+            System.out.println(pinyin);
+
+            // Chinese explanation.
+            Element basicWrapper = dictDoc.getElementById("basicmean-wrapper");
+            if (basicWrapper == null) {
+                Element baikeWrapper = dictDoc.getElementById("baike-wrapper");
+                if (baikeWrapper == null) {
+                    System.out.println("MEANING NOT FOUND.");
+                } else {
+                    System.out.println("Link to Baike article:" + INITIAL_URL);
+                    System.out.println(baikeWrapper.selectFirst("p").text());
+                }
+                continue;
+            }
+            String chineseExplain = basicWrapper.child(1).text().trim();
+            int start = chineseExplain.indexOf("]");
+            if (start != -1) {
+                chineseExplain = chineseExplain.substring(start + 1).trim();
+            }
+            System.out.println(chineseExplain);
+
+            // English explanation.
+            Element engWrapper = dictDoc.getElementById("fanyi-wrapper").child(1);
+            String eng = engWrapper.text().trim();
+            System.out.println(eng);
         }
-
-        BufferedReader in = new BufferedReader(
-                new InputStreamReader(conn.getInputStream()));
-        String inputLine;
-        StringBuffer html = new StringBuffer();
-
-        while ((inputLine = in.readLine()) != null) {
-            html.append(inputLine);
-        }
-        in.close();
-
-        System.out.println("URL Content... \n" + html.toString());
-        System.out.println("Done");
-
-
-
     }
 }
