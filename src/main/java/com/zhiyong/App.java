@@ -11,7 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
+
 
 public class App {
     private static final String BAIDU_DICT_URL_BASE = "https://dict.baidu.com";
@@ -106,8 +106,15 @@ public class App {
             // If length is more than 1 character greater, look up individual words.
             if (hrefLength - word.length() > 1) {
                 System.out.println("GONNA SPLIT");
-                Set<String> splitWords = word.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet());
-                return splitWords.stream().map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
+                Set<String> splitWords = new HashSet<>();
+                for (char c : word.toCharArray()) {
+                    splitWords.add(String.valueOf(c));
+                }
+                Set<Word> words = new HashSet<>();
+                for (String s : splitWords) {
+                    words.addAll(dictLookupHelper(s));
+                }
+                return words;
             }
 
             String url = BAIDU_DICT_URL_BASE + href;
@@ -117,8 +124,15 @@ public class App {
         }
         if (pinyinWrapper == null) {
             System.out.println("NOT FOUND. GONNA SPLIT");
-            Set<String> splitWords = word.chars().mapToObj(c -> (char) c).map(String::valueOf).collect(Collectors.toSet());
-            return splitWords.stream().map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
+            Set<String> splitWords = new HashSet<>();
+            for (char c : word.toCharArray()) {
+                splitWords.add(String.valueOf(c));
+            }
+            Set<Word> words = new HashSet<>();
+            for (String s : splitWords) {
+                words.addAll(dictLookupHelper(s));
+            }
+            return words;
         }
 
         Set<Word> results = new HashSet<>();
@@ -184,15 +198,20 @@ public class App {
         JiebaSegmenter segmenter = new JiebaSegmenter();
 //        Set<String> segments = new HashSet<>(segmenter.sentenceProcess(text));
         List<String> segmentList = new ArrayList<>(segmenter.sentenceProcess(text));
-        Set<String> segments = new HashSet<>(segmentList.stream().limit(10).collect(Collectors.toList()));
 
-
-
+        Set<String> segments = new HashSet<>();
+//        segments.addAll(segmentList.subList(0, 10));
+        segments.addAll(segmentList);
+//        Set<String> segments = new HashSet<>(segmentList.stream().limit(10).collect(Collectors.toList()));
 
         // Filter Chinese strings then do dictionary lookup.
-        return segments.stream().filter(x -> Character.UnicodeScript.of(x.charAt(0)) ==
-                Character.UnicodeScript.HAN)
-                .map(this::dictLookupHelper).collect(HashSet::new, Set::addAll, Set::addAll);
+        Set<Word> results = new HashSet<>();
+        for (String segment : segments) {
+            if (Character.UnicodeScript.of(segment.charAt(0)) == Character.UnicodeScript.HAN) {
+                results.addAll(dictLookupHelper(segment));
+            }
+        }
+        return results;
     }
 
     public static void main(String[] args) throws IOException {
